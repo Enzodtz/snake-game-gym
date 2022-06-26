@@ -6,7 +6,7 @@ import gym
 from gym import spaces, logger
 import numpy as np
 import random
-from gym.envs.classic_control import rendering
+import pygame
 
 
 class SnakeGameEnv(gym.Env):
@@ -48,7 +48,7 @@ class SnakeGameEnv(gym.Env):
         220.0 over 100 consecutive trials.
     """
 
-    metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 50}
+    metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 10}
 
     def __init__(self):
         self.x_size = 15
@@ -57,11 +57,10 @@ class SnakeGameEnv(gym.Env):
         # Actions and Observations
         self.action_space = spaces.Discrete(3)
         # Ray maximum length times ray quantity times ray channels plus the snake length
-        self.observation_space = spaces.MultiDiscrete(
-            [14] * 8 * 3 + [225],
-        )
+        self.observation_space = spaces.MultiDiscrete([15] * 8 * 3 + [226])
 
-        self.viewer = None
+        self.window = None
+        self.clock = None
         self.state = None
         self.snake = None
         self.apple = None
@@ -303,7 +302,7 @@ class SnakeGameEnv(gym.Env):
 
         new_state += self.snake_piece_ray_observation()
 
-        self.state = new_state
+        self.state = np.array(new_state)
 
     def step(self, action):
         err_msg = f"{action!r} ({type(action)}) invalid"
@@ -347,18 +346,11 @@ class SnakeGameEnv(gym.Env):
         self.initial_parts()
         self.global_snake_direction = 1
         self.generate_state()
-        return np.array(self.state)
+        return self.state
 
     def render_background(self, screen_width, screen_height):
-        l, b, t, r = (
-            0,
-            screen_height,
-            0,
-            screen_width,
-        )
-        bg = rendering.FilledPolygon([(l, b), (l, t), (r, t), (r, b)])
-        bg.set_color(0, 0, 0)
-        self.viewer.add_geom(bg)
+        self.canvas = pygame.Surface((screen_width, screen_height))
+        self.canvas.fill((0, 0, 0))
 
     def render_snake_pieces(self, tile_size):
         for piece in self.snake:
@@ -368,9 +360,11 @@ class SnakeGameEnv(gym.Env):
                 piece[0] * tile_size,
                 piece[1] * tile_size + tile_size,
             )
-            piece_geom = rendering.FilledPolygon([(l, b), (l, t), (r, t), (r, b)])
-            piece_geom.set_color(0, 255, 0)
-            self.viewer.add_onetime(piece_geom)
+            pygame.draw.rect(
+                self.canvas,
+                (0, 255, 0),
+                pygame.Rect(l, t, r - l, b - t),
+            )
 
     def render_apple(self, tile_size):
         l, b, t, r = (
@@ -379,29 +373,45 @@ class SnakeGameEnv(gym.Env):
             self.apple[0] * tile_size,
             self.apple[1] * tile_size + tile_size,
         )
-        apple_geom = rendering.FilledPolygon([(l, b), (l, t), (r, t), (r, b)])
-        apple_geom.set_color(255, 0, 0)
-        self.viewer.add_onetime(apple_geom)
+        pygame.draw.rect(
+            self.canvas,
+            (255, 0, 0),
+            pygame.Rect(l, t, r - l, b - t),
+        )
 
     def render(self, mode="human"):
+        if self.state is None:
+            return None
+
         tile_size = 40
 
         screen_width = tile_size * 15
         screen_height = tile_size * 15
 
-        if self.viewer is None:
-            self.viewer = rendering.Viewer(screen_width, screen_height)
-            self.render_background(screen_width, screen_height)
+        if self.window is None and mode == "human":
+            pygame.init()
+            pygame.display.init()
+            self.window = pygame.display.set_mode((screen_width, screen_height))
 
+        if self.clock is None and mode == "human":
+            self.clock = pygame.time.Clock()
+
+        self.render_background(screen_width, screen_height)
         self.render_snake_pieces(tile_size)
         self.render_apple(tile_size)
 
-        if self.state is None:
-            return None
+        if mode == "human":
+            self.window.blit(self.canvas, self.canvas.get_rect())
+            pygame.event.pump()
+            pygame.display.update()
 
-        return self.viewer.render(return_rgb_array=mode == "rgb_array")
+            self.clock.tick(self.metadata["render_fps"])
+        else:  # rgb_array
+            return np.transpose(
+                np.array(pygame.surfarray.pixels3d(self.canvas)), axes=(1, 0, 2)
+            )
 
     def close(self):
-        if self.viewer:
-            self.viewer.close()
-            self.viewer = None
+        if self.window is not None:
+            pygame.display.quit()
+            pygame.quit()

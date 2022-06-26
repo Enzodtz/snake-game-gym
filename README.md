@@ -7,7 +7,7 @@ Use the popular snake game into open AI gym environments
 ```bash
 git clone https://github.com/Enzodtz/snake-game-gym.git
 cd snake-game-gym
-python3 setup.py install
+python3 -m pip install -e .
 ```
 
 ## Usage
