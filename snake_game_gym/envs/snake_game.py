@@ -48,7 +48,7 @@ class SnakeGameEnv(gym.Env):
         220.0 over 100 consecutive trials.
     """
 
-    metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 10}
+    metadata = {"render.modes": ["human", "rgb_array"], "render_fps": 10}
 
     def __init__(self):
         self.x_size = 15
@@ -65,6 +65,7 @@ class SnakeGameEnv(gym.Env):
         self.snake = None
         self.apple = None
         self.global_snake_direction = None
+        self.steps_without_eating = 0
         # Note: global_snake_direction refers to the global direction of the snake, not
         # equals as the action ones
         # Global:
@@ -73,12 +74,8 @@ class SnakeGameEnv(gym.Env):
         #         2
 
     def initial_parts(self):
-        self.snake = [
-            [7, 4],
-            [7, 3],
-        ]
-
-        self.apple = [7, 11]
+        self.snake = [[random.randint(0, 14), random.randint(0, 14)]]
+        self.generate_new_random_apple()
 
     def relative_to_global_direction(self, global_direction, relative_direction):
         # Turning right
@@ -122,12 +119,18 @@ class SnakeGameEnv(gym.Env):
 
     def generate_new_random_apple(self):
         self.apple = [random.randint(0, 14), random.randint(0, 14)]
+        while self.apple in self.snake:
+            self.apple = [random.randint(0, 14), random.randint(0, 14)]
 
     def check_if_ate_apple(self):
         for piece in self.snake:
             if piece == self.apple:
                 self.snake.append(self.snake[-1].copy())
                 self.generate_new_random_apple()
+
+                return True
+
+        return False
 
     def check_if_hit_wall(self):
         head_x = self.snake[0][0]
@@ -314,31 +317,28 @@ class SnakeGameEnv(gym.Env):
 
         self.move_snake()
 
-        ate_apple = self.check_if_ate_apple()
-
         died = self.check_if_hit_wall() or self.check_if_hit_itself()
-
         won = self.check_if_won()
+
+        ate_apple = self.check_if_ate_apple()
 
         self.generate_state()
 
         done = died or won
 
+        reward = 0
         if not done:
             if ate_apple:
                 reward = 10.0
             else:
-                reward = 1.0
-        else:
-            reward = 0.0
+                reward = 1
 
-        if done:
-            logger.warn(
-                "You are calling 'step()' even though this "
-                "environment has already returned done = True. You "
-                "should always call 'reset()' once you receive 'done = "
-                "True' -- any further steps are undefined behavior."
-            )
+        if not ate_apple:
+            self.steps_without_eating += 1
+
+        if self.steps_without_eating > 225:
+            done = True
+            reward = -255
 
         return np.array(self.state), reward, done, {}
 
@@ -346,6 +346,7 @@ class SnakeGameEnv(gym.Env):
         self.initial_parts()
         self.global_snake_direction = 1
         self.generate_state()
+        self.steps_without_eating = 0
         return self.state
 
     def render_background(self, screen_width, screen_height):
@@ -378,6 +379,15 @@ class SnakeGameEnv(gym.Env):
             (255, 0, 0),
             pygame.Rect(l, t, r - l, b - t),
         )
+
+    def set_apple(self, apple):
+        self.apple = apple
+
+    def set_snake(self, snake):
+        self.snake = snake
+
+    def set_global_snake_direction(self, global_snake_direction):
+        self.global_snake_direction = global_snake_direction
 
     def render(self, mode="human"):
         if self.state is None:
