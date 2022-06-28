@@ -166,7 +166,9 @@ class SnakeGameEnv(gym.Env):
             ray_position[1] += x_behaviour
             if ray_position == self.apple:
                 break
-        obs.append(distance)
+        
+        #obs.append(distance)
+        obs.append(1 if distance < 14 else 0) #binary ray
 
     def apple_ray_observation(self):
         obs = []
@@ -231,7 +233,8 @@ class SnakeGameEnv(gym.Env):
             ray_position[1] += x_behaviour
             if ray_position in self.snake[1:]:
                 break
-        obs.append(distance)
+        #obs.append(distance)
+        obs.append(1 if distance < 14 else 0) #binary ray
 
     def snake_piece_ray_observation(self):
         obs = []
@@ -330,15 +333,15 @@ class SnakeGameEnv(gym.Env):
         if not done:
             if ate_apple:
                 reward = 10.0
-            else:
-                reward = 1
+            # else:
+            # reward = 1
 
         if not ate_apple:
             self.steps_without_eating += 1
 
         if self.steps_without_eating > 225:
             done = True
-            reward = -255
+            # reward = -255
 
         return np.array(self.state), reward, done, {}
 
